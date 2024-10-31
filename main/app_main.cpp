@@ -209,16 +209,21 @@ extern "C" void app_main()
     ABORT_APP_ON_FAILURE(node != nullptr, ESP_LOGE(TAG, "Failed to create Matter node"));
 
     struct gpio_plug plug1;
-    plug1.GPIO_PIN_VALUE = (gpio_num_t) CONFIG_GPIO_PLUG_1;
+    plug1.GPIO_PIN_VALUE = GPIO_NUM_0;
     create_plug(&plug1, node);
 
     struct gpio_plug plug2;
-    plug2.GPIO_PIN_VALUE = (gpio_num_t) CONFIG_GPIO_PLUG_2;
+    plug2.GPIO_PIN_VALUE = GPIO_NUM_1;
     create_plug(&plug2, node);
 
     struct gpio_plug plug3;
-    plug3.GPIO_PIN_VALUE = (gpio_num_t) CONFIG_GPIO_PLUG_3;
+    plug3.GPIO_PIN_VALUE = GPIO_NUM_2;
     create_plug(&plug3, node);
+
+    struct gpio_plug plug4;
+    plug4.GPIO_PIN_VALUE = GPIO_NUM_3;
+    create_plug(&plug4, node);
+
 
 #if CHIP_DEVICE_CONFIG_ENABLE_THREAD
     /* Set OpenThread platform config */

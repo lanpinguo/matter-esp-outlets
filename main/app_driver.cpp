@@ -16,11 +16,11 @@
 
 #include <app_priv.h>
 
-#define SCL_IO_PIN          GPIO_NUM_18
-#define SDA_IO_PIN          GPIO_NUM_19
-#define MASTER_FREQUENCY    400000
-#define PORT_NUMBER         -1
-#define LENGTH              48
+#define SCL_IO_PIN          GPIO_NUM_22
+#define SDA_IO_PIN          GPIO_NUM_21
+#define MASTER_FREQUENCY    100000
+#define PORT_NUMBER         0
+#define LENGTH              1
 
 
 using namespace chip::app::Clusters;
@@ -28,26 +28,62 @@ using namespace esp_matter;
 
 static const char *TAG = "app_driver";
 
+i2c_master_dev_handle_t pfc_dev_handle = NULL;
 
 static esp_err_t app_driver_update_gpio_value(gpio_num_t pin, bool value)
 {
     esp_err_t err = ESP_OK;
 
-    err = gpio_set_level(pin, value);
+    uint8_t buf[2] = {0, 0};
+    u_int8_t len = 1;
+
+    ESP_LOGI(TAG, "SW GPIO pin : %d set to %d", pin, value);
+
+    err = i2c_master_receive(pfc_dev_handle, buf, len, 50);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get GPIO level");
+    }
+    ESP_LOGI(TAG, "read GPIO pin : 0x%x", buf[0]);
+
+    buf[0] = buf[0] & (~(0x3<<(2*pin)));
+	if(value == true){
+		buf[0] |= (0x02 << (2 * pin));
+	}
+	else{
+		buf[0] |= (0x01 << (2 * pin));
+	}
+    err = i2c_master_transmit(pfc_dev_handle, buf, len, 50);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to set GPIO level");
         return ESP_FAIL;
     } else {
-        ESP_LOGI(TAG, "GPIO pin : %d set to %d", pin, value);
+        ESP_LOGI(TAG, "EX-GPIO pin : %d set to 0x%x", pin, buf[0]);
     }
+
+    vTaskDelay(100);
+
+    buf[0] = 0;
+    err = i2c_master_transmit(pfc_dev_handle, buf, len, 50);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set GPIO level");
+        return ESP_FAIL;
+    } else {
+        ESP_LOGI(TAG, "EX-GPIO pin : %d set to 0x%x", pin, buf[0]);
+    }
+
     return err;
 }
 
-i2c_master_dev_handle_t pfc_dev_handle;
 
 esp_err_t app_driver_i2c_init()
 {
     esp_err_t err = ESP_OK;
+
+    if(pfc_dev_handle != NULL){
+        return err;
+    }
+
+    ESP_LOGI(TAG, "app init extend gpio module");
 
     i2c_master_bus_config_t i2c_bus_config = {
         .i2c_port = PORT_NUMBER,
@@ -58,17 +94,20 @@ esp_err_t app_driver_i2c_init()
     };
     i2c_master_bus_handle_t bus_handle;
 
+    i2c_bus_config.flags.enable_internal_pullup = 1;
     ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_bus_config, &bus_handle));
 
     i2c_device_config_t i2c_dev_conf = {
-        .device_address = 0x50,
+        .device_address = 0x20,
         .scl_speed_hz = MASTER_FREQUENCY,
     };
     err = i2c_master_bus_add_device(bus_handle, &i2c_dev_conf, &pfc_dev_handle);
 
-    uint8_t cmd_buf[4];
-    u_int8_t cmd_len = 4;
-    i2c_master_transmit_receive(pfc_dev_handle, cmd_buf, cmd_len, cmd_buf, cmd_len, -1);
+    uint8_t cmd_buf[2] = {0};
+    u_int8_t cmd_len = 1;
+    i2c_master_transmit_receive(pfc_dev_handle, cmd_buf, cmd_len, cmd_buf, cmd_len, 100);
+
+    ESP_LOGI(TAG, "i2c read: %x", cmd_buf[0]);
 
     return err;
 }
@@ -77,18 +116,21 @@ esp_err_t app_driver_plugin_unit_init(const gpio_plug* plug)
 {
     esp_err_t err = ESP_OK;
 
-    gpio_reset_pin(plug->GPIO_PIN_VALUE);
+    // gpio_reset_pin(plug->GPIO_PIN_VALUE);
 
-    err = gpio_set_direction(plug->GPIO_PIN_VALUE, GPIO_MODE_OUTPUT);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Unable to set GPIO OUTPUT mode");
-        return ESP_FAIL;
-    }
+    // err = gpio_set_direction(plug->GPIO_PIN_VALUE, GPIO_MODE_OUTPUT);
+    // if (err != ESP_OK) {
+    //     ESP_LOGE(TAG, "Unable to set GPIO OUTPUT mode");
+    //     return ESP_FAIL;
+    // }
 
-    err = gpio_set_level(plug->GPIO_PIN_VALUE, 0);
-    if (err != ESP_OK) {
-        ESP_LOGI(TAG, "Unable to set GPIO level");
-    }
+    // err = gpio_set_level(plug->GPIO_PIN_VALUE, 0);
+    // if (err != ESP_OK) {
+    //     ESP_LOGI(TAG, "Unable to set GPIO level");
+    // }
+
+    app_driver_i2c_init();
+
     return err;
 }
 
